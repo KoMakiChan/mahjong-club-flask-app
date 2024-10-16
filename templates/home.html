@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mahjong Club - Player Rankings</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .ranking-card {
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+        .ranking-card:hover {
+            transform: scale(1.02);
+        }
+        .rank {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+            margin-right: 20px;
+        }
+        .player-details {
+            flex-grow: 1;
+        }
+        .player-name {
+            font-size: 1.5em;
+            font-weight: 700;
+        }
+        .points, .games-played {
+            font-size: 1em;
+            margin-top: 5px;
+        }
+        .admin-link {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .admin-link a {
+            text-decoration: none;
+            background-color: #3498db;
+            color: #ffffff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .admin-link a:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mahjong Club - Player Rankings</h1>
+
+        {% for player in players %}
+        <div class="ranking-card">
+            <div class="rank">#{{ loop.index }}</div>
+            <div class="player-details">
+                <div class="player-name">{{ player['name'] }}</div>
+                <div class="points">Points: {{ player['total_points'] }}</div>
+                <div class="games-played">Games Played: {{ player['games_played'] }}</div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="admin-link">
+            <a href="/admin-login">Admin Login</a>
+        </div>
+    </div>
+</body>
+</html>
