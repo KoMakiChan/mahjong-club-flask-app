@@ -197,7 +197,7 @@ def admin_page():
 
     conn.close()
 
-    return render_template("admin.html", players=players, games=games)
+    return render_template("admin_dashboard.html", players=players, games=games)
 
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
