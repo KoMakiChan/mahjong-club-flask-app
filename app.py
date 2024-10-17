@@ -87,6 +87,7 @@ def admin_page():
                 flash(f"Player '{player_name}' already exists.", "danger")
 
         # Add a new game
+        # Add a new game
         elif "add_game" in request.form:
             players = [request.form[f"player{i}"] for i in range(1, 5)]
             scores = [int(request.form[f"score{i}"]) for i in range(1, 5)]
@@ -100,23 +101,20 @@ def admin_page():
                 flash("All scores must be multiples of 100.", "danger")
             else:
                 # Calculate final scores and determine ranks
-                final_scores = [(score // 1000) - 30 for score in scores]
+                final_scores = [(score / 1000) - 30 for score in scores]
 
                 # Sort indices by final scores in descending order
                 sorted_indices = sorted(range(4), key=lambda i: final_scores[i], reverse=True)
-                ranks = [0] * 4
 
-                # Assign ranks considering ties, randomly assigning tied ranks
-                i = 0
-                while i < 4:
-                    j = i
-                    while j < 3 and final_scores[sorted_indices[j]] == final_scores[sorted_indices[j + 1]]:
-                        j += 1
-                    tied_indices = sorted_indices[i:j + 1]
-                    random.shuffle(tied_indices)  # Randomly assign ranks among tied players
-                    for k, idx in enumerate(tied_indices):
-                        ranks[idx] = i + k + 1
-                    i = j + 1
+                # Ranking bonuses: 50, 10, -10, -30
+                bonuses = [50, 10, -10, -30]
+
+                # Apply ranking bonuses
+                for i, idx in enumerate(sorted_indices):
+                    final_scores[idx] += bonuses[i]
+
+                # Round final scores to one decimal place
+                final_scores = [round(score, 1) for score in final_scores]
 
                 # Insert the new game into the database
                 cursor.execute("""
@@ -128,7 +126,7 @@ def admin_page():
 
                 # Update each player's statistics in the database
                 for i, player in enumerate(players):
-                    rank = ranks[i]
+                    rank = sorted_indices.index(i) + 1
                     rank_column = f"rank{rank}_count"
                     cursor.execute(f"""
                         UPDATE players
@@ -202,7 +200,7 @@ def admin_page():
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
     # Calculate base points: (raw_score // 1000) - 30
-    base_points = [(score // 1000) - 30 for score in raw_scores]
+    base_points = [(score / 1000) - 30 for score in raw_scores]
 
     # Sort indices by raw scores in descending order
     sorted_indices = sorted(range(4), key=lambda i: raw_scores[i], reverse=True)
@@ -211,16 +209,20 @@ def calculate_final_scores(raw_scores):
     bonuses = [50, 10, -10, -30]
     final_scores = base_points[:]
 
-    # Distribute bonuses considering ties
+    # Apply bonuses considering ties
     i = 0
     while i < 4:
         j = i
         while j < 3 and raw_scores[sorted_indices[j]] == raw_scores[sorted_indices[j + 1]]:
             j += 1
+        # If there's a tie, split the bonuses equally
         split_bonus = sum(bonuses[i:j + 1]) / (j - i + 1)
         for k in range(i, j + 1):
             final_scores[sorted_indices[k]] += split_bonus
         i = j + 1
+
+    # Round final scores to one decimal place
+    final_scores = [round(score, 1) for score in final_scores]
 
     # Calculate ranks for each player
     ranks = [0] * 4
