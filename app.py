@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, flash, session, url_for
 import sqlite3
 import random
+import os
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Needed for session management
@@ -51,14 +52,20 @@ def home():
 
     players = cursor.fetchall()
     conn.close()
+  # Modify the total_points to round it before sending to the template
+    rounded_players = []
+    for player in players:
+        rounded_player = dict(player)
+        rounded_player['total_points'] = round(player['total_points'], 1)
+        rounded_players.append(rounded_player)
 
-    return render_template("home.html", players=players)
+    return render_template("home.html", players=rounded_players)
 
 # Route for the admin login page
 @app.route("/admin-login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        if request.form.get("password") == "1":
+        if request.form.get("password") == os.getenv('FLASK_ADMIN_PASSWORD') :
             session["is_admin"] = True  # Set admin session
             flash("Logged in as admin.", "success")
             return redirect(url_for("admin_page"))
