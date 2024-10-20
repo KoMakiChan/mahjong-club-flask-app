@@ -39,9 +39,12 @@
             display: flex;
             align-items: center;
             transition: transform 0.2s;
+            text-decoration: none;
+            color: inherit;
         }
         .ranking-card:hover {
             transform: scale(1.02);
+            cursor: pointer;
         }
         .rank {
             font-size: 2em;
@@ -94,14 +97,14 @@
                 </div>
             </div>
             {% for player in players %}
-            <div class="ranking-card">
+            <a href="{{ url_for('player_statistics', player_name=player['name']) }}" class="ranking-card">
                 <div class="rank">#{{ loop.index }}</div>
                 <div class="player-details">
                     <div class="player-name">{{ player['name'] }}</div>
                     <div class="points">Points: {{ player['total_points'] }}</div>
                     <div class="games-played">Games Played: {{ player['games_played'] }}</div>
                 </div>
-            </div>
+            </a>
             {% endfor %}
         </div>
 

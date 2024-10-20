@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ player_name }}'s Statistics</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .player-highlight {
+            font-weight: bold;
+            color: #3498db;
+        }
+        .point-change {
+            font-size: 1.2em;
+        }
+        .positive-change {
+            color: red;
+        }
+        .negative-change {
+            color: green;
+        }
+        .return-button a {
+            text-decoration: none;
+            background-color: #3498db;
+            color: #ffffff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .return-button a:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-row">
+            <h1>{{ player_name }}'s Game History</h1>
+            <div class="return-button">
+                <a href="{{ url_for('home') }}">Return to Home</a>
+            </div>
+        </div>
+
+        <table>
+            <tr>
+                <th>Date</th>
+                <th>Ranked 1</th>
+                <th>Score 1</th>
+                <th>Ranked 2</th>
+                <th>Score 2</th>
+                <th>Ranked 3</th>
+                <th>Score 3</th>
+                <th>Ranked 4</th>
+                <th>Score 4</th>
+                <th>Total Points After This Game</th>
+                <th>Change</th>
+            </tr>
+            {% for game in games %}
+            <tr>
+                <td>{{ game['game_date'] }}</td>
+                {% for player, raw_score, final_score in game['players_and_scores'] %}
+                <td class="{% if player == player_name %}player-highlight{% endif %}">
+                    {{ player }}
+                </td>
+                <td>{{ raw_score }}</td>
+                {% endfor %}
+                <td>{{ '%.1f' % game['total_points_after_game'] }} pts</td> <!-- Round to 1 decimal -->
+                <td class="point-change {% if game['point_change'] > 0 %}positive-change{% else %}negative-change{% endif %}">
+                    {% if game['point_change'] > 0 %}+{% endif %}{{ game['point_change'] }} pts
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>
