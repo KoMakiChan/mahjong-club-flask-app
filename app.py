@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, flash, session, url
 import sqlite3
 import random
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Needed for session management
@@ -203,6 +204,42 @@ def admin_page():
     conn.close()
 
     return render_template("admin_dashboard.html", players=players, games=games)
+
+
+@app.route("/view-past-games", methods=["GET", "POST"])
+def view_past_games():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Handle filters if they are provided
+    player_filter = request.form.get("player_filter")
+    date_filter = request.form.get("date_filter")
+
+    query = """
+    SELECT game_date, player1, player2, player3, player4, raw_score1, raw_score2, raw_score3, raw_score4
+    FROM games WHERE 1=1
+    """
+    params = []
+
+    if player_filter:
+        query += " AND (? IN (player1, player2, player3, player4))"
+        params.append(player_filter)
+
+    if date_filter:
+        query += " AND DATE(game_date) = ?"
+        params.append(date_filter)
+
+    query += " ORDER BY game_date DESC"
+    cursor.execute(query, params)
+    games = cursor.fetchall()
+
+    # Fetch players for the dropdown
+    cursor.execute("SELECT name FROM players")
+    players = cursor.fetchall()
+
+    conn.close()
+
+    return render_template("view_past_games.html", games=games, players=players)
 
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):

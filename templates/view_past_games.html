@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Past Games</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .filter-section {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Past Games</h1>
+
+        <div class="filter-section">
+            <form method="POST">
+                <label for="player_filter">Filter by Player:</label>
+                <select name="player_filter" id="player_filter">
+                    <option value="">All Players</option>
+                    {% for player in players %}
+                    <option value="{{ player['name'] }}">{{ player['name'] }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="date_filter">Filter by Date:</label>
+                <input type="date" name="date_filter" id="date_filter">
+
+                <button type="submit">Filter</button>
+            </form>
+        </div>
+
+        <table>
+            <tr>
+                <th>Date</th>
+                <th>Player 1</th>
+                <th>Score 1</th>
+                <th>Player 2</th>
+                <th>Score 2</th>
+                <th>Player 3</th>
+                <th>Score 3</th>
+                <th>Player 4</th>
+                <th>Score 4</th>
+            </tr>
+            {% for game in games %}
+            <tr>
+                <td>{{ game['game_date'] }}</td>
+                <td>{{ game['player1'] }}</td>
+                <td>{{ game['raw_score1'] }}</td>
+                <td>{{ game['player2'] }}</td>
+                <td>{{ game['raw_score2'] }}</td>
+                <td>{{ game['player3'] }}</td>
+                <td>{{ game['raw_score3'] }}</td>
+                <td>{{ game['player4'] }}</td>
+                <td>{{ game['raw_score4'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>
+
