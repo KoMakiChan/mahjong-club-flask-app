@@ -3,6 +3,7 @@ import sqlite3
 import random
 import os
 from datetime import datetime
+from urllib.parse import unquote
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Needed for session management
@@ -240,6 +241,64 @@ def view_past_games():
     conn.close()
 
     return render_template("view_past_games.html", games=games, players=players)
+
+@app.route("/player/<player_name>")
+def player_statistics(player_name):
+    player_name = unquote(player_name) 
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Fetch the player's game history
+    cursor.execute("""
+    SELECT game_date, player1, player2, player3, player4, 
+           raw_score1, raw_score2, raw_score3, raw_score4,
+           final_score1, final_score2, final_score3, final_score4
+    FROM games 
+    WHERE ? IN (player1, player2, player3, player4)
+    ORDER BY game_date DESC
+    """, (player_name,))
+    games = cursor.fetchall()
+
+    # Track cumulative total points for the player
+    running_total = 0
+    processed_games = []
+
+    # Process each game in reverse order (oldest to newest) to calculate the running total
+    for game in reversed(games):
+        players_and_scores = [
+            (game['player1'], game['raw_score1'], game['final_score1']),
+            (game['player2'], game['raw_score2'], game['final_score2']),
+            (game['player3'], game['raw_score3'], game['final_score3']),
+            (game['player4'], game['raw_score4'], game['final_score4'])
+        ]
+        players_and_scores.sort(key=lambda x: x[2], reverse=True)  # Sort by final score
+
+        # Find the current player's final score
+        current_game_points = None
+        for player, raw_score, final_score in players_and_scores:
+            if player == player_name:
+                current_game_points = final_score
+                break
+
+        # Calculate the point change and update the running total
+        previous_total = running_total
+        running_total += current_game_points  # Update cumulative points
+
+        processed_games.append({
+            'game_date': game['game_date'],
+            'players_and_scores': players_and_scores,
+            'point_change' : round(current_game_points,1),
+            'previous_total': round(previous_total, 1),
+            'total_points_after_game': round(running_total, 1)  # Round the running total
+        })
+
+    # Reverse processed games back to descending order (newest to oldest)
+    processed_games.reverse()
+
+    conn.close()
+
+    return render_template("player_statistics.html", player_name=player_name, games=processed_games)
+
 
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
