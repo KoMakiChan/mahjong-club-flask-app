@@ -51,8 +51,15 @@ def home():
 
     players = cursor.fetchall()
     conn.close()
+    # Modify the total_points to round it before sending to the template
+    rounded_players = []
+    for player in players:
+        rounded_player = dict(player)
+        rounded_player['total_points'] = round(player['total_points'], 1)
+        rounded_players.append(rounded_player)
 
-    return render_template("home.html", players=players)
+    return render_template("home.html", players=rounded_players)
+
 
 # Route for the admin login page
 @app.route("/admin-login", methods=["GET", "POST"])
