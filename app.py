@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, flash, session, url_for
 import sqlite3
 import random
+from urllib.parse import unquote
 from datetime import datetime
 
 app = Flask(__name__)
@@ -244,6 +245,7 @@ def view_past_games():
 
 @app.route("/player/<player_name>")
 def player_statistics(player_name):
+    player_name = unquote(player_name)  # Decode the URL-encoded player name
     conn = get_db_connection()
     cursor = conn.cursor()
 
