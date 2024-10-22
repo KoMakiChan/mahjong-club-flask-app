@@ -2,8 +2,8 @@ from flask import Flask, render_template, request, redirect, flash, session, url
 import sqlite3
 import random
 import os
-from datetime import datetime
 from urllib.parse import unquote
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Needed for session management
@@ -33,10 +33,16 @@ def home():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # SQL query to calculate player stats dynamically from the games table
+    # SQL query to calculate player stats dynamically from the games table and players table
     cursor.execute("""
     SELECT 
         p.name,
+        p.games_played,
+        p.rank1_count,
+        p.rank2_count,
+        p.rank3_count,
+        p.rank4_count,
+        p.highest_rank,
         COUNT(g.game_id) AS games_played,
         SUM(CASE 
             WHEN g.player1 = p.name THEN g.final_score1
@@ -53,15 +59,32 @@ def home():
     """)
 
     players = cursor.fetchall()
-    conn.close()
-  # Modify the total_points to round it before sending to the template
-    rounded_players = []
-    for player in players:
-        rounded_player = dict(player)
-        rounded_player['total_points'] = round(player['total_points'], 1)
-        rounded_players.append(rounded_player)
 
-    return render_template("home.html", players=rounded_players)
+    player_data = []
+    for player in players:
+        # Calculate the average rank directly from the player's rank counts
+        total_games = player['games_played']
+        if total_games > 0:
+            # Weigh the ranks: 1*rank1_count + 2*rank2_count + 3*rank3_count + 4*rank4_count
+            total_rank_score = (1 * player['rank1_count']) + (2 * player['rank2_count']) + (3 * player['rank3_count']) + (4 * 
+player['rank4_count'])
+            average_rank = round(total_rank_score / total_games, 2)
+        else:
+            average_rank = 'N/A'
+
+        # Append the player's data along with the calculated average rank
+        player_data.append({
+            'name': player['name'],
+            'total_points': round(player['total_points'], 1),
+            'games_played': total_games,
+            'highest_rank': player['highest_rank'],
+            'average_rank': average_rank  # Use the calculated average rank
+        })
+
+    conn.close()
+
+    return render_template("home.html", players=player_data)
+
 
 # Route for the admin login page
 @app.route("/admin-login", methods=["GET", "POST"])
@@ -86,18 +109,8 @@ def admin_page():
     cursor = conn.cursor()
 
     if request.method == "POST":
-        # Add a new player
-        if "add_player" in request.form:
-            player_name = request.form["player_name"]
-            try:
-                cursor.execute("INSERT INTO players (name) VALUES (?)", (player_name,))
-                flash(f"Player '{player_name}' added successfully.", "success")
-            except sqlite3.IntegrityError:
-                flash(f"Player '{player_name}' already exists.", "danger")
-
         # Add a new game
-        # Add a new game
-        elif "add_game" in request.form:
+        if "add_game" in request.form:
             players = [request.form[f"player{i}"] for i in range(1, 5)]
             scores = [int(request.form[f"score{i}"]) for i in range(1, 5)]
 
@@ -109,20 +122,26 @@ def admin_page():
             elif not all(score % 100 == 0 for score in scores):
                 flash("All scores must be multiples of 100.", "danger")
             else:
-                # Calculate final scores and determine ranks
+                # Calculate final scores and assign ranks
                 final_scores = [(score / 1000) - 30 for score in scores]
-
-                # Sort indices by final scores in descending order
                 sorted_indices = sorted(range(4), key=lambda i: final_scores[i], reverse=True)
 
-                # Ranking bonuses: 50, 10, -10, -30
+                # Handle ranking bonuses
                 bonuses = [50, 10, -10, -30]
+                ranks = [0] * 4
+                i = 0
+                while i < 4:
+                    j = i
+                    while j < 3 and final_scores[sorted_indices[j]] == final_scores[sorted_indices[j + 1]]:
+                        j += 1
+                    tied_indices = sorted_indices[i:j + 1]
+                    random.shuffle(tied_indices)
+                    for k, idx in enumerate(tied_indices):
+                        ranks[idx] = i + k + 1
+                    i = j + 1
 
-                # Apply ranking bonuses
                 for i, idx in enumerate(sorted_indices):
                     final_scores[idx] += bonuses[i]
-
-                # Round final scores to one decimal place
                 final_scores = [round(score, 1) for score in final_scores]
 
                 # Insert the new game into the database
@@ -133,10 +152,11 @@ def admin_page():
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, players + scores + final_scores)
 
-                # Update each player's statistics in the database
+                conn.commit()  # Commit the game insertion
+
+                # Update the rank statistics for each player after the game is added
                 for i, player in enumerate(players):
-                    rank = sorted_indices.index(i) + 1
-                    rank_column = f"rank{rank}_count"
+                    rank_column = f"rank{ranks[i]}_count"
                     cursor.execute(f"""
                         UPDATE players
                         SET games_played = games_played + 1,
@@ -144,18 +164,42 @@ def admin_page():
                         WHERE name = ?
                     """, (player,))
 
-                flash("Game added successfully!", "success")
+                    # Recalculate rank for each player inline
+                    # Fetch the player's recent games (up to 30 or fewer, depending on rank threshold)
+                    cursor.execute("""
+                    SELECT final_score1, final_score2, final_score3, final_score4, 
+                           player1, player2, player3, player4
+                    FROM games
+                    WHERE player1 = ? OR player2 = ? OR player3 = ? OR player4 = ?
+                    ORDER BY game_date DESC
+                    LIMIT 30
+                    """, (player, player, player, player))
 
-        # Delete a game
+                    games = cursor.fetchall()
+
+                    # Calculate the player's current rank based on their recent games
+                    current_rank = calculate_player_rank(games, player)
+
+                    # Fetch the highest rank the player ever achieved
+                    cursor.execute("SELECT highest_rank FROM players WHERE name = ?", (player,))
+                    highest_rank = cursor.fetchone()['highest_rank']
+
+                    # Update only if the current rank is higher than the highest rank
+                    if current_rank > highest_rank:
+                        cursor.execute("UPDATE players SET highest_rank = ? WHERE name = ?", (current_rank, player))
+
+                conn.commit()  # Commit the rank updates
+                flash("Game and ranks updated successfully!", "success")
+
         elif "delete_game" in request.form:
             game_id = request.form["game_id"]
 
             # Retrieve the game data before deleting
             cursor.execute("""
-                SELECT player1, player2, player3, player4,
-                       final_score1, final_score2, final_score3, final_score4
-                FROM games WHERE game_id = ?
-            """, (game_id,))
+                     SELECT player1, player2, player3, player4,
+                            final_score1, final_score2, final_score3, final_score4
+                     FROM games WHERE game_id = ?
+                 """, (game_id,))
             game = cursor.fetchone()
 
             if game:
@@ -183,25 +227,28 @@ def admin_page():
                     rank = ranks[i]
                     rank_column = f"rank{rank}_count"
                     cursor.execute(f"""
-                        UPDATE players
-                        SET games_played = games_played - 1,
-                            {rank_column} = {rank_column} - 1
-                        WHERE name = ?
-                    """, (player,))
+                             UPDATE players
+                             SET games_played = games_played - 1,
+                                 {rank_column} = {rank_column} - 1
+                             WHERE name = ?
+                         """, (player,))
 
                 # Delete the game
                 cursor.execute("DELETE FROM games WHERE game_id = ?", (game_id,))
                 flash("Game deleted successfully!", "success")
 
         conn.commit()
-
+    conn.close()
     # Fetch the players and games for the admin page
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute("SELECT * FROM players ORDER BY name")
     players = cursor.fetchall()
 
-    cursor.execute("SELECT game_id, game_date, player1, player2, player3, player4, raw_score1, raw_score2, raw_score3, raw_score4 FROM games ORDER BY game_date DESC")
+    cursor.execute("""SELECT game_id, game_date, player1, player2, player3, player4, raw_score1, raw_score2, raw_score3, raw_score4 FROM 
+games 
+ORDER BY game_date DESC""")
     games = cursor.fetchall()
-
     conn.close()
 
     return render_template("admin_dashboard.html", players=players, games=games)
@@ -244,7 +291,7 @@ def view_past_games():
 
 @app.route("/player/<player_name>")
 def player_statistics(player_name):
-    player_name = unquote(player_name) 
+    player_name = unquote(player_name)  # Decode the URL-encoded player name
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -299,7 +346,6 @@ def player_statistics(player_name):
 
     return render_template("player_statistics.html", player_name=player_name, games=processed_games)
 
-
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
     # Calculate base points: (raw_score // 1000) - 30
@@ -346,40 +392,126 @@ def calculate_final_scores(raw_scores):
     return final_scores, rank_counts
 
 
-def update_player_stats(cursor, players, scores):
-    # Sort players by their scores (descending)
-    sorted_indices = sorted(range(4), key=lambda i: scores[i], reverse=True)
-    print(f"Sorted indices for stats: {sorted_indices}")  # Debugging output
 
-    # Determine ranks based on the sorted scores
-    ranks = [0] * 4
-    for i in range(4):
-        if i > 0 and scores[sorted_indices[i]] == scores[sorted_indices[i - 1]]:
-            ranks[sorted_indices[i]] = ranks[sorted_indices[i - 1]]
+# New function to calculate the player's rank based on their last X games
+def update_player_rank(player_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Fetch the player's recent games (up to 30 or fewer, depending on rank threshold)
+    cursor.execute("""
+    SELECT final_score1, final_score2, final_score3, final_score4, 
+           player1, player2, player3, player4
+    FROM games
+    WHERE player1 = ? OR player2 = ? OR player3 = ? OR player4 = ?
+    ORDER BY game_date DESC
+    LIMIT 30
+    """, (player_name, player_name, player_name, player_name))
+
+    games = cursor.fetchall()
+
+    # Calculate the player's current rank based on their recent games
+    current_rank = calculate_player_rank(games, player_name)
+
+    # Fetch the highest rank the player ever achieved
+    cursor.execute("SELECT highest_rank FROM players WHERE name = ?", (player_name,))
+    highest_rank = cursor.fetchone()['highest_rank']
+
+    # Update only if the current rank is higher than the highest rank
+    if current_rank > highest_rank:
+        cursor.execute("UPDATE players SET highest_rank = ? WHERE name = ?", (current_rank, player_name))
+
+    conn.commit()
+    conn.close()
+# New function to calculate the player's rank based on their last X games
+def calculate_player_rank(games, player_name):
+    # Rank thresholds: (required games, max average rank), starting from 10-dan (highest rank)
+    rank_thresholds = [
+        (30, 2.0),  # Rank 14 (10-dan)
+        (25, 2.1),  # Rank 13 (9-dan)
+        (25, 2.2),  # Rank 12 (8-dan)
+        (25, 2.3),  # Rank 11 (7-dan)
+        (20, 2.3),  # Rank 10 (6-dan)
+        (20, 2.4),  # Rank 9 (5-dan)
+        (15, 2.4),  # Rank 8 (4-dan)
+        (15, 2.5),  # Rank 7 (3-dan)
+        (10, 2.5),  # Rank 6 (2-dan) <-- Fixed!
+        (10, 2.6),  # Rank 5 (1-dan)
+        (10, 2.7),  # Rank 4 (1-que)
+        (5, 2.8),  # Rank 3 (2-que)
+        (5, 2.9),  # Rank 2 (3-que)
+        (5, 3.0),  # Rank 1 (4-que)
+    ]
+
+    # Initialize a list to store the ranks of the player for each game
+    player_ranks = []
+
+    # Calculate the ranks for each game
+    for game in games:
+        final_scores = [
+            game['final_score1'],
+            game['final_score2'],
+            game['final_score3'],
+            game['final_score4']
+        ]
+        sorted_scores = sorted(final_scores, reverse=True)
+
+        # Find the player's final score in this game
+        if game['player1'] == player_name:
+            player_final_score = game['final_score1']
+        elif game['player2'] == player_name:
+            player_final_score = game['final_score2']
+        elif game['player3'] == player_name:
+            player_final_score = game['final_score3']
+        elif game['player4'] == player_name:
+            player_final_score = game['final_score4']
         else:
-            ranks[sorted_indices[i]] = i + 1
+            continue  # Skip if the player is not part of this game
 
-    print(f"Ranks: {ranks}")  # Debugging output
+        # Find the rank for the player in this game
+        player_rank = sorted_scores.index(player_final_score) + 1
+        player_ranks.append(player_rank)
 
-    # Map ranks to rank counts: 1 -> Rank1, 2 -> Rank2, etc.
-    rank_counts = [0, 0, 0, 0]
-    for rank in ranks:
-        rank_counts[rank - 1] += 1
+    # Now we calculate the average rank for each threshold by sliding the window of recent games
+    total_games = len(player_ranks)
 
-    print(f"Rank counts: {rank_counts}")  # Debugging output
+    # Iterate over the rank thresholds from highest (10-dan) to lowest (4-que)
+    for rank, (required_games, max_avg) in enumerate(rank_thresholds, start=1):
+        if total_games >= required_games:
+            # Calculate the average rank over the most recent 'required_games' number of games
+            recent_ranks = player_ranks[-required_games:]  # Get the most recent 'required_games'
+            avg_position = sum(recent_ranks) / required_games
 
-    # Update each player's statistics in the database
-    for i, player in enumerate(players):
-        cursor.execute("""
-            UPDATE players
-            SET games_played = games_played + 1,
-                rank1_count = rank1_count + ?,
-                rank2_count = rank2_count + ?,
-                rank3_count = rank3_count + ?,
-                rank4_count = rank4_count + ?
-            WHERE name = ?
-        """, (rank_counts[0], rank_counts[1], rank_counts[2], rank_counts[3], player))
+            if avg_position <= max_avg:
+                return 15 - rank  # Return the appropriate rank (Rank 14 in the database is 10-dan)
+
+    return 0  # Default to rank 0 (5-que) in the system
+
+
+
+# Helper function to map highest_rank to rank description
+def rank_display(highest_rank):
+    rank_mapping = {
+        0: "5级",
+        1: "4级",
+        2: "3级",
+        3: "2级",
+        4: "1级",
+        5: "初段",
+        6: "二段",
+        7: "三段",
+        8: "四段",
+        9: "五段",
+        10: "六段",
+        11: "七段",
+        12: "八段",
+        13: "九段",
+        14: "十段"
+    }
+    return rank_mapping.get(highest_rank, "Unranked")
+app.jinja_env.globals.update(rank_display=rank_display)
 
 # Run the Flask app
 if __name__ == "__main__":
     app.run(debug=True)
+
