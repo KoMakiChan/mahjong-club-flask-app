@@ -60,6 +60,31 @@ def home():
 
     players = cursor.fetchall()
 
+    # Step 1: Get the 4th highest rank to determine qualifying players for the Fenix game
+    cursor.execute("SELECT highest_rank FROM players ORDER BY highest_rank DESC LIMIT 4")
+    ranks = cursor.fetchall()
+
+    if len(ranks) < 4:
+        qualifying_rank = ranks[-1]['highest_rank'] if ranks else 0
+    else:
+        qualifying_rank = ranks[-1]['highest_rank'] - 1  # Qualify if rank >= (4th highest - 1)
+
+    # Step 2: Fetch the current Fenix from the latest Fenix game
+    cursor.execute("""
+        SELECT * FROM games
+        WHERE player1 IN (SELECT name FROM players WHERE highest_rank >= ?)
+          AND player2 IN (SELECT name FROM players WHERE highest_rank >= ?)
+          AND player3 IN (SELECT name FROM players WHERE highest_rank >= ?)
+          AND player4 IN (SELECT name FROM players WHERE highest_rank >= ?)
+        ORDER BY game_date DESC LIMIT 1
+        """, (qualifying_rank, qualifying_rank, qualifying_rank, qualifying_rank))
+
+    latest_fenix_game = cursor.fetchone()
+
+    if latest_fenix_game:
+        current_fenix = get_winner(latest_fenix_game)
+    else:
+        current_fenix = None  # Fallback if no Fenix game exists
     player_data = []
     for player in players:
         # Calculate the average rank directly from the player's rank counts
@@ -83,14 +108,14 @@ player['rank4_count'])
 
     conn.close()
 
-    return render_template("home.html", players=player_data)
+    return render_template("home.html", players=player_data, current_fenix=current_fenix)
 
 
 # Route for the admin login page
 @app.route("/admin-login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        if request.form.get("password") == os.getenv('FLASK_ADMIN_PASSWORD') :
+        if request.form.get("password") ==  os.getenv('FLASK_ADMIN_PASSWORD') :
             session["is_admin"] = True  # Set admin session
             flash("Logged in as admin.", "success")
             return redirect(url_for("admin_page"))
@@ -245,9 +270,8 @@ def admin_page():
     cursor.execute("SELECT * FROM players ORDER BY name")
     players = cursor.fetchall()
 
-    cursor.execute("""SELECT game_id, game_date, player1, player2, player3, player4, raw_score1, raw_score2, raw_score3, raw_score4 FROM 
-games 
-ORDER BY game_date DESC""")
+    cursor.execute("""SELECT game_id, game_date, player1, player2, player3, player4, raw_score1, 
+    raw_score2, raw_score3, raw_score4 FROM games ORDER BY game_date DESC""")
     games = cursor.fetchall()
     conn.close()
 
@@ -346,6 +370,57 @@ def player_statistics(player_name):
 
     return render_template("player_statistics.html", player_name=player_name, games=processed_games)
 
+# Helper function to determine the winner of a Fenix game
+def get_winner(game):
+    scores = [
+        (game['player1'], game['final_score1']),
+        (game['player2'], game['final_score2']),
+        (game['player3'], game['final_score3']),
+        (game['player4'], game['final_score4'])
+    ]
+    return max(scores, key=lambda x: x[1])[0]  # Return the player with the highest final score
+app.jinja_env.globals.update(get_winner=get_winner)
+
+@app.route("/fenix")
+def fenix_page():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Step 1: Get the 4th highest rank
+    cursor.execute("SELECT highest_rank FROM players ORDER BY highest_rank DESC LIMIT 4")
+    ranks = cursor.fetchall()
+    if len(ranks) < 4:
+        qualifying_rank = ranks[-1]['highest_rank'] if ranks else 0
+    else:
+        qualifying_rank = ranks[-1]['highest_rank'] - 1  # Qualify if rank >= (4th highest - 1)
+
+    # Step 2: Get the list of qualifying players
+    cursor.execute("SELECT name, highest_rank FROM players WHERE highest_rank >= ?", (qualifying_rank,))
+    qualifying_players = cursor.fetchall()
+
+    # Step 3: Get all past Fenix games
+    players_in_clause = ', '.join(['?'] * len(qualifying_players))
+    qualifying_names = [player['name'] for player in qualifying_players]
+    cursor.execute(f"""
+        SELECT * FROM games
+        WHERE player1 IN ({players_in_clause})
+          AND player2 IN ({players_in_clause})
+          AND player3 IN ({players_in_clause})
+          AND player4 IN ({players_in_clause})
+        ORDER BY game_date DESC
+    """, (*qualifying_names, *qualifying_names, *qualifying_names, *qualifying_names))
+    fenix_games = cursor.fetchall()
+
+    # Step 4: Determine the "current Fenix"
+    current_fenix = None
+    if fenix_games:
+        latest_game = fenix_games[0]
+        current_fenix = get_winner(latest_game)  # Get the winner using the helper function
+
+    conn.close()
+
+    return render_template("fenix.html", qualifying_players=qualifying_players, fenix_games=fenix_games, current_fenix=current_fenix, 
+qualifying_rank=qualifying_rank)
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
     # Calculate base points: (raw_score // 1000) - 30

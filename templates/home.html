@@ -65,6 +65,8 @@
         .player-name {
             font-size: 1.5em;
             font-weight: 700;
+            display: flex;
+            align-items: center;
         }
         .points, .games-played, .avg-rank {
             font-size: 1em;
@@ -91,6 +93,12 @@
         }
         .admin-link a:hover, .past-games-link a:hover {
             background-color: #2980b9;
+        }
+        .fenix-icon {
+            width: 40px;  /* Increased the size */
+            height: 40px;  /* Increased the size */
+            margin-right: 10px;  /* Adds space between icon and name */
+            vertical-align: middle;  /* Align icon vertically with the name */
         }
         .modal {
             display: none;
@@ -144,19 +152,22 @@
     <div class="container">
         <h1>Mahjong Club</h1>
 
+        <!-- Club description -->
         <div class="section">
-            <!-- Club description here -->
             <p>Welcome to the Mahjong Club! We meet every Friday&Saturday at 6 PM at the Illini Tower. We follow the Mahjong League rules 
 with minor changes (check Discord for detailed rules), and anyone is welcome to join and play.</p>
         </div>
 
+        <!-- Links for viewing past games and Fenix games -->
         <div class="section">
             <div class="ranking-header">
                 <a href="{{ url_for('view_past_games') }}" class="past-games-link">View Past Games</a>
+                <a href="{{ url_for('fenix_page') }}" class="past-games-link">View Fenix Games</a>
                 <button onclick="document.getElementById('rank-modal').style.display='block'">Rank Explanation</button>
             </div>
         </div>
 
+        <!-- Player Rankings -->
         <div class="section">
             <h2>Player Rankings</h2>
             {% for player in players %}
@@ -164,7 +175,14 @@ with minor changes (check Discord for detailed rules), and anyone is welcome to 
                 <div class="rank">#{{ loop.index }}</div>
                 <div class="player-details">
                     <div class="player-info">
-                        <div class="player-name">{{ player['name'] }}</div>
+                        <div class="player-name">
+                            <!-- Fenix Icon next to current Fenix (now larger and on the left) -->
+                            {{ player['name'] }}
+                            {% if player['name'] == current_fenix %}
+                            <img src="https://github.com/KoMakiChan/mahjong-club-flask-app/blob/main/fenix-icon.jpg?raw=true" alt="Fenix 
+Icon" class="fenix-icon">
+                            {% endif %}
+                        </div>
                         <div class="points">Points: {{ player['total_points'] }}</div>
                         <div class="games-played">Games Played: {{ player['games_played'] }}</div>
                         <div class="avg-rank">平均顺位: {{ player['average_rank'] }}</div>
@@ -175,6 +193,7 @@ with minor changes (check Discord for detailed rules), and anyone is welcome to 
             {% endfor %}
         </div>
 
+        <!-- Admin login link -->
         <div class="admin-link">
             <a href="/admin-login">Admin Login</a>
         </div>
