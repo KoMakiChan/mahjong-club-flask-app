@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, flash, session, url_for
 import sqlite3
 import random
+import os
 from urllib.parse import unquote
 from datetime import datetime
 
@@ -258,9 +259,26 @@ def admin_page():
 
                 # Delete the game
                 cursor.execute("DELETE FROM games WHERE game_id = ?", (game_id,))
+                conn.commit()
                 flash("Game deleted successfully!", "success")
+        elif "add_player" in request.form:
+            player_name = request.form.get("player_name").strip()
 
-        conn.commit()
+            # Check if the player already exists
+            cursor.execute("SELECT * FROM players WHERE name = ?", (player_name,))
+            existing_player = cursor.fetchone()
+
+            if existing_player:
+                flash("Player already exists.", "danger")
+            else:
+                # Insert the new player into the database
+                cursor.execute("""
+                       INSERT INTO players (name, games_played, rank1_count, rank2_count, rank3_count, rank4_count, highest_rank) 
+                       VALUES (?, 0, 0, 0, 0, 0, 0)
+                   """, (player_name,))
+                conn.commit()
+                flash(f"Player '{player_name}' added successfully!", "success")
+
     conn.close()
     # Fetch the players and games for the admin page
     conn = get_db_connection()
