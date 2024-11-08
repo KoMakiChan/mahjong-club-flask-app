@@ -118,7 +118,7 @@ def home():
 @app.route("/admin-login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        if request.form.get("password") ==  os.getenv('FLASK_ADMIN_PASSWORD') :
+        if request.form.get("password") == os.getenv('FLASK_ADMIN_PASSWORD') :
             session["is_admin"] = True  # Set admin session
             flash("Logged in as admin.", "success")
             return redirect(url_for("admin_page"))
@@ -177,12 +177,16 @@ def admin_page():
                 cursor.execute("""
                     INSERT INTO games (player1, player2, player3, player4, 
                                        raw_score1, raw_score2, raw_score3, raw_score4,
-                                       final_score1, final_score2, final_score3, final_score4)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       final_score1, final_score2, final_score3, final_score4,is_fenix)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,FALSE)
                 """, players + scores + final_scores)
 
                 conn.commit()  # Commit the game insertion
-
+                # Check if the game qualifies as a Fenix game
+                fenix_players = get_fenix_players()
+                if set(players) == set(fenix_players):  # If the players match the Fenix players
+                    cursor.execute("UPDATE games SET is_fenix = TRUE WHERE game_id = (SELECT MAX(game_id) FROM games)")
+                    conn.commit()
                 # Update the rank statistics for each player after the game is added
                 for i, player in enumerate(players):
                     rank_column = f"rank{ranks[i]}_count"
@@ -416,42 +420,16 @@ def fenix_page():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Step 1: Get the 4th highest rank
-    cursor.execute("SELECT highest_rank FROM players ORDER BY highest_rank DESC LIMIT 4")
-    ranks = cursor.fetchall()
-    if len(ranks) < 4:
-        qualifying_rank = ranks[-1]['highest_rank'] if ranks else 0
-    else:
-        qualifying_rank = ranks[-1]['highest_rank'] - 1  # Qualify if rank >= (4th highest - 1)
+    # Fetch current Fenix players using the helper function
+    qualifying_players = get_fenix_players()
 
-    # Step 2: Get the list of qualifying players
-    cursor.execute("SELECT name, highest_rank FROM players WHERE highest_rank >= ?", (qualifying_rank,))
-    qualifying_players = cursor.fetchall()
-
-    # Step 3: Get all past Fenix games
-    players_in_clause = ', '.join(['?'] * len(qualifying_players))
-    qualifying_names = [player['name'] for player in qualifying_players]
-    cursor.execute(f"""
-        SELECT * FROM games
-        WHERE player1 IN ({players_in_clause})
-          AND player2 IN ({players_in_clause})
-          AND player3 IN ({players_in_clause})
-          AND player4 IN ({players_in_clause})
-        ORDER BY game_date DESC
-    """, (*qualifying_names, *qualifying_names, *qualifying_names, *qualifying_names))
+    # Retrieve historical Fenix games (those marked with is_fenix = TRUE)
+    cursor.execute("SELECT * FROM games WHERE is_fenix = TRUE ORDER BY game_date DESC")
     fenix_games = cursor.fetchall()
-
-    # Step 4: Determine the "current Fenix"
-    current_fenix = None
-    if fenix_games:
-        latest_game = fenix_games[0]
-        current_fenix = get_winner(latest_game)  # Get the winner using the helper function
 
     conn.close()
 
-    return render_template("fenix.html", qualifying_players=qualifying_players, fenix_games=fenix_games,
-                           current_fenix=current_fenix, qualifying_rank=qualifying_rank)
-
+    return render_template("fenix.html", qualifying_players=qualifying_players, fenix_games=fenix_games)
 
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
@@ -622,6 +600,80 @@ def rank_display(highest_rank):
         14: "十段"
     }
     return rank_mapping.get(highest_rank, "Unranked")
+
+
+def get_fenix_players():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Step 1: Retrieve all players with their stats to calculate average rank
+    cursor.execute("""
+        SELECT name, highest_rank, rank1_count, rank2_count, rank3_count, rank4_count, games_played 
+        FROM players
+    """)
+    players = cursor.fetchall()
+
+    player_data = []
+
+    # Step 2: Calculate the average rank and total points for each player
+    for player in players:
+        total_games = player['games_played']
+
+        # Calculate average rank
+        if total_games > 0:
+            total_rank_score = (
+                    (1 * player['rank1_count']) +
+                    (2 * player['rank2_count']) +
+                    (3 * player['rank3_count']) +
+                    (4 * player['rank4_count'])
+            )
+            average_rank = round(total_rank_score / total_games, 2)
+        else:
+            average_rank = float('inf')  # Set to infinity if no games played
+
+        # Calculate total points by summing up scores across games
+        cursor.execute("""
+            SELECT SUM(
+                CASE 
+                    WHEN player1 = ? THEN final_score1
+                    WHEN player2 = ? THEN final_score2
+                    WHEN player3 = ? THEN final_score3
+                    WHEN player4 = ? THEN final_score4
+                    ELSE 0
+                END
+            ) AS total_points
+            FROM games
+        """, (player['name'], player['name'], player['name'], player['name']))
+        total_points = cursor.fetchone()['total_points'] or 0
+
+        player_data.append({
+            'name': player['name'],
+            'highest_rank': player['highest_rank'],
+            'average_rank': average_rank,
+            'total_points': total_points
+        })
+
+    # Step 3: Sort players by highest_rank, with average_rank as a tiebreaker
+    player_data.sort(key=lambda p: (-p['highest_rank'], p['average_rank']))
+
+    # Step 4: Select the top 3 players by rank
+    top_3_players = player_data[:3]
+
+    # Step 5: Find the player with the highest score not in the top 3
+    top_3_names = {p['name'] for p in top_3_players}
+    remaining_players = [p for p in player_data if p['name'] not in top_3_names]
+    remaining_players.sort(key=lambda p: p['total_points'], reverse=True)
+
+    fourth_player = remaining_players[0] if remaining_players else None
+
+    # Step 6: Collect the names of the four qualifying Fenix players
+    fenix_players = [p['name'] for p in top_3_players]
+    if fourth_player:
+        fenix_players.append(fourth_player['name'])
+
+    conn.close()
+
+    return fenix_players
 
 
 app.jinja_env.globals.update(rank_display=rank_display)

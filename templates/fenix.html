@@ -1,22 +1,20 @@
 <div class="section">
     <h2>Fenix Game Rules</h2>
     <p>
-    Top players qualify for Fenix games if their rank is greater than or equal to the 4th highest-ranked player's rank minus 1.
-    For this Fenix game, players with a rank of <strong>{{ rank_display(qualifying_rank) }}</strong> or higher qualify.
+    The Fenix game consists of the top 3 players by rank and average ranking in case of ties. The 4th player is the one with the highest 
+points among players not in the top 3.
     </p>
 </div>
 
-<!-- List of qualifying players -->
 <div class="section">
     <h2>Qualifying Players</h2>
     <ul>
         {% for player in qualifying_players %}
-        <li>{{ player['name'] }} ({{ rank_display(player['highest_rank']) }})</li>
+            <li>{{ player }} - {% if loop.index <= 3 %}Top 3 Rank{% else %}Highest Score{% endif %}</li>
         {% endfor %}
     </ul>
 </div>
 
-<!-- List of past Fenix games -->
 <div class="section">
     <h2>Past Fenix Games</h2>
     <table>
