@@ -8,6 +8,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Needed for session management
 
+
 # Custom filter to safely round values
 def safe_round(value, precision=2):
     try:
@@ -16,6 +17,7 @@ def safe_round(value, precision=2):
         return round(value, precision)
     except (TypeError, ValueError):
         return 0  # Return 0 if rounding fails for any reason
+
 
 # Register the custom filter with Flask
 app.jinja_env.filters['safe_round'] = safe_round
@@ -26,6 +28,7 @@ def get_db_connection():
     conn = sqlite3.connect('mahjong.db')
     conn.row_factory = sqlite3.Row  # Return rows as dictionaries
     return conn
+
 
 # Route for the home page (default)
 @app.route("/")
@@ -91,7 +94,8 @@ def home():
         total_games = player['games_played']
         if total_games > 0:
             # Weigh the ranks: 1*rank1_count + 2*rank2_count + 3*rank3_count + 4*rank4_count
-            total_rank_score = (1 * player['rank1_count']) + (2 * player['rank2_count']) + (3 * player['rank3_count']) + (4 * player['rank4_count'])
+            total_rank_score = (1 * player['rank1_count']) + (2 * player['rank2_count']) + (
+                        3 * player['rank3_count']) + (4 * player['rank4_count'])
             average_rank = round(total_rank_score / total_games, 2)
         else:
             average_rank = 'N/A'
@@ -121,6 +125,7 @@ def admin_login():
         else:
             flash("Invalid password.", "danger")
     return render_template("admin_login.html")
+
 
 # Route for the admin page
 @app.route("/admin", methods=["GET", "POST"])
@@ -187,28 +192,32 @@ def admin_page():
                             {rank_column} = {rank_column} + 1
                         WHERE name = ?
                     """, (player,))
-
+                    conn.commit()
                     # Recalculate rank for each player inline
-                    # Fetch the player's recent games (up to 30 or fewer, depending on rank threshold)
-                    cursor.execute("""
-                    SELECT final_score1, final_score2, final_score3, final_score4, 
-                           player1, player2, player3, player4
-                    FROM games
-                    WHERE player1 = ? OR player2 = ? OR player3 = ? OR player4 = ?
-                    ORDER BY game_date DESC
-                    LIMIT 30
-                    """, (player, player, player, player))
+                    # Retrieve all relevant games for the 4 players in the newly added game
+                cursor.execute("""
+                               SELECT * FROM games
+                               WHERE player1 IN (?, ?, ?, ?)
+                                  OR player2 IN (?, ?, ?, ?)
+                                  OR player3 IN (?, ?, ?, ?)
+                                  OR player4 IN (?, ?, ?, ?)
+                               ORDER BY game_date DESC
+                           """, (*players, *players, *players, *players))
 
-                    games = cursor.fetchall()
+                all_relevant_games = cursor.fetchall()
 
-                    # Calculate the player's current rank based on their recent games
-                    current_rank = calculate_player_rank(games, player)
+                # Update rank for each player
+                for player in players:
+                    # Calculate the new rank based on recent games
+                    current_rank = calculate_player_rank(all_relevant_games, player)
 
-                    # Fetch the highest rank the player ever achieved
+                    # Update the player’s highest rank if a new rank is achieved
                     cursor.execute("SELECT highest_rank FROM players WHERE name = ?", (player,))
                     highest_rank = cursor.fetchone()['highest_rank']
 
-                    # Update only if the current rank is higher than the highest rank
+                    # Debug statement to compare past and new rank
+                    print(f"Player: {player}, Past rank: {highest_rank}, New rank: {current_rank}")
+
                     if current_rank > highest_rank:
                         cursor.execute("UPDATE players SET highest_rank = ? WHERE name = ?", (current_rank, player))
 
@@ -329,6 +338,7 @@ def view_past_games():
 
     return render_template("view_past_games.html", games=games, players=players)
 
+
 @app.route("/player/<player_name>")
 def player_statistics(player_name):
     player_name = unquote(player_name)  # Decode the URL-encoded player name
@@ -374,7 +384,7 @@ def player_statistics(player_name):
         processed_games.append({
             'game_date': game['game_date'],
             'players_and_scores': players_and_scores,
-            'point_change' : round(current_game_points,1),
+            'point_change': round(current_game_points, 1),
             'previous_total': round(previous_total, 1),
             'total_points_after_game': round(running_total, 1)  # Round the running total
         })
@@ -386,6 +396,7 @@ def player_statistics(player_name):
 
     return render_template("player_statistics.html", player_name=player_name, games=processed_games)
 
+
 # Helper function to determine the winner of a Fenix game
 def get_winner(game):
     scores = [
@@ -395,7 +406,10 @@ def get_winner(game):
         (game['player4'], game['final_score4'])
     ]
     return max(scores, key=lambda x: x[1])[0]  # Return the player with the highest final score
+
+
 app.jinja_env.globals.update(get_winner=get_winner)
+
 
 @app.route("/fenix")
 def fenix_page():
@@ -435,7 +449,10 @@ def fenix_page():
 
     conn.close()
 
-    return render_template("fenix.html", qualifying_players=qualifying_players, fenix_games=fenix_games, current_fenix=current_fenix, qualifying_rank=qualifying_rank)
+    return render_template("fenix.html", qualifying_players=qualifying_players, fenix_games=fenix_games,
+                           current_fenix=current_fenix, qualifying_rank=qualifying_rank)
+
+
 # Function to calculate final scores
 def calculate_final_scores(raw_scores):
     # Calculate base points: (raw_score // 1000) - 30
@@ -482,7 +499,6 @@ def calculate_final_scores(raw_scores):
     return final_scores, rank_counts
 
 
-
 # New function to calculate the player's rank based on their last X games
 def update_player_rank(player_name):
     conn = get_db_connection()
@@ -513,6 +529,8 @@ def update_player_rank(player_name):
 
     conn.commit()
     conn.close()
+
+
 # New function to calculate the player's rank based on their last X games
 def calculate_player_rank(games, player_name):
     # Rank thresholds: (required games, max average rank), starting from 10-dan (highest rank)
@@ -536,8 +554,14 @@ def calculate_player_rank(games, player_name):
     # Initialize a list to store the ranks of the player for each game
     player_ranks = []
 
+    # Filter games to include only those where the specified player participated
+    relevant_games = [
+        game for game in games
+        if player_name in {game['player1'], game['player2'], game['player3'], game['player4']}
+    ]
+
     # Calculate the ranks for each game
-    for game in games:
+    for game in relevant_games:
         final_scores = [
             game['final_score1'],
             game['final_score2'],
@@ -555,28 +579,27 @@ def calculate_player_rank(games, player_name):
             player_final_score = game['final_score3']
         elif game['player4'] == player_name:
             player_final_score = game['final_score4']
-        else:
-            continue  # Skip if the player is not part of this game
+
 
         # Find the rank for the player in this game
         player_rank = sorted_scores.index(player_final_score) + 1
         player_ranks.append(player_rank)
+        # Debug: Show the rank for this game
 
     # Now we calculate the average rank for each threshold by sliding the window of recent games
     total_games = len(player_ranks)
 
-    # Iterate over the rank thresholds from highest (10-dan) to lowest (4-que)
     for rank, (required_games, max_avg) in enumerate(rank_thresholds, start=1):
         if total_games >= required_games:
             # Calculate the average rank over the most recent 'required_games' number of games
-            recent_ranks = player_ranks[-required_games:]  # Get the most recent 'required_games'
+            recent_ranks = player_ranks[:required_games]  # Get the most recent 'required_games'
             avg_position = sum(recent_ranks) / required_games
 
             if avg_position <= max_avg:
+
                 return 15 - rank  # Return the appropriate rank (Rank 14 in the database is 10-dan)
 
     return 0  # Default to rank 0 (5-que) in the system
-
 
 
 # Helper function to map highest_rank to rank description
@@ -599,6 +622,8 @@ def rank_display(highest_rank):
         14: "十段"
     }
     return rank_mapping.get(highest_rank, "Unranked")
+
+
 app.jinja_env.globals.update(rank_display=rank_display)
 
 # Run the Flask app
