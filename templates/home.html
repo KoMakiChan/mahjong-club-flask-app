@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@700&display=swap" rel="stylesheet">
     <style>
+        /* Base Styles */
         body {
             font-family: 'Roboto', sans-serif;
             background-color: #f9f9f9;
@@ -27,7 +28,7 @@
         }
         .ranking-header {
             display: flex;
-            justify-content: space-between;
+            justify-content: space-around;
             align-items: center;
             margin-bottom: 10px;
         }
@@ -47,59 +48,58 @@
             transform: scale(1.02);
             cursor: pointer;
         }
-        .rank {
-            font-size: 2em;
-            font-weight: bold;
-            color: #3498db;
-            margin-right: 20px;
-        }
         .player-details {
-            flex-grow: 1;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            flex-grow: 1;
+            justify-content: space-between;
         }
         .player-info {
-            flex-grow: 1;
+            flex: 1;
+        }
+        .chart-container {
+            width: 120px;
+            height: 120px;
+            margin-left: 20px;
         }
         .player-name {
-            font-size: 1.5em;
+            font-size: 1.2em;
             font-weight: 700;
             display: flex;
             align-items: center;
         }
-        .points, .games-played, .avg-rank {
-            font-size: 1em;
+        .points, .games-played, .avg-rank, .rank-percentage {
+            font-size: 0.9em;
             margin-top: 5px;
         }
         .fancy-rank {
             font-family: 'Raleway', sans-serif;
-            font-size: 1.2em;
+            font-size: 1.1em;
             color: #ff5722;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-            margin-left: 20px;
+            margin-left: 10px;
+            margin-right: 10px;
         }
-        .admin-link, .past-games-link {
-            text-align: center;
-            margin-top: 30px;
+        .fenix-icon {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            vertical-align: middle;
         }
-        .admin-link a, .past-games-link a {
+        /* Button Styling */
+        .link-button {
             text-decoration: none;
             background-color: #3498db;
             color: #ffffff;
             padding: 10px 20px;
             border-radius: 5px;
             transition: background-color 0.3s;
+            display: inline-block;
+            margin: 5px;
         }
-        .admin-link a:hover, .past-games-link a:hover {
+        .link-button:hover {
             background-color: #2980b9;
         }
-        .fenix-icon {
-            width: 40px;  /* Increased the size */
-            height: 40px;  /* Increased the size */
-            margin-right: 10px;  /* Adds space between icon and name */
-            vertical-align: middle;  /* Align icon vertically with the name */
-        }
+        /* Modal Styling */
         .modal {
             display: none;
             position: fixed;
@@ -154,16 +154,17 @@
 
         <!-- Club description -->
         <div class="section">
-            <p>Welcome to the Mahjong Club! We meet every Friday&Saturday at 6 PM at the Illini Tower. We follow the Mahjong League rules 
-with minor changes (check Discord for detailed rules), and anyone is welcome to join and play.</p>
+            <p>Welcome to the Mahjong Club! We meet every Friday & Saturday at 6 PM at the Illini Tower. We follow the Mahjong League 
+rules with minor changes (check Discord for detailed rules), and anyone is welcome to join and play.</p>
         </div>
 
         <!-- Links for viewing past games and Fenix games -->
         <div class="section">
             <div class="ranking-header">
-                <a href="{{ url_for('view_past_games') }}" class="past-games-link">View Past Games</a>
-                <a href="{{ url_for('fenix_page') }}" class="past-games-link">View Fenix Games</a>
-                <button onclick="document.getElementById('rank-modal').style.display='block'">Rank Explanation</button>
+                <a href="{{ url_for('view_past_games') }}" class="link-button">View Past Games</a>
+                <a href="{{ url_for('fenix_page') }}" class="link-button">View Fenix Games</a>
+                <button onclick="document.getElementById('rank-modal').style.display='block'" class="link-button">Rank 
+Explanation</button>
             </div>
         </div>
 
@@ -171,12 +172,10 @@ with minor changes (check Discord for detailed rules), and anyone is welcome to 
         <div class="section">
             <h2>Player Rankings</h2>
             {% for player in players %}
-            <a href="{{ url_for('player_statistics', player_name=player['name']) }}" class="ranking-card">
-                <div class="rank">#{{ loop.index }}</div>
+            <div class="ranking-card">
                 <div class="player-details">
                     <div class="player-info">
                         <div class="player-name">
-                            <!-- Fenix Icon next to current Fenix (now larger and on the left) -->
                             {{ player['name'] }}
                             {% if player['name'] == current_fenix %}
                             <img src="https://github.com/KoMakiChan/mahjong-club-flask-app/blob/main/fenix-icon.jpg?raw=true" alt="Fenix 
@@ -186,16 +185,20 @@ Icon" class="fenix-icon">
                         <div class="points">Points: {{ player['total_points'] }}</div>
                         <div class="games-played">Games Played: {{ player['games_played'] }}</div>
                         <div class="avg-rank">平均顺位: {{ player['average_rank'] }}</div>
+                        <div class="rank-percentage">Rank 1: {{ player['rank_percentages'][0] }}%, Rank 2: {{ 
+player['rank_percentages'][1] }}%, Rank 3: {{ player['rank_percentages'][2] }}%, Rank 4: {{ player['rank_percentages'][3] }}%</div>
                     </div>
                     <div class="fancy-rank">{{ rank_display(player['highest_rank']) }}</div>
+                    <div class="chart-container">
+                        <canvas id="pieChart{{ loop.index }}"></canvas>
+                    </div>
                 </div>
-            </a>
+            </div>
             {% endfor %}
         </div>
-
-        <!-- Admin login link -->
+      <!-- Admin login link -->
         <div class="admin-link">
-            <a href="/admin-login">Admin Login</a>
+            <a href="/admin-login" class="link-button">Admin Login</a>
         </div>
     </div>
 
@@ -206,7 +209,7 @@ Icon" class="fenix-icon">
             <h2>Ranking System</h2>
             <p>Players are ranked based on their average position in recent games. Your rank will never go down once you've achieved a new 
 rank. Your rank is calculated purely based on the average ranking per game in the past X games (not by points).</p>
-            <table>
+           <table>
                 <tr>
                     <th>Level</th>
                     <th>Games</th>
@@ -291,13 +294,37 @@ rank. Your rank is calculated purely based on the average ranking per game in th
         </div>
     </div>
 
+    <!-- Include Chart.js and Chart.js Plugin for Datalabels -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
     <script>
-        window.onclick = function(event) {
-            var modal = document.getElementById('rank-modal');
-            if (event.target == modal) {
-                modal.style.display = "none";
+        {% for player in players %}
+        new Chart(document.getElementById('pieChart{{ loop.index }}'), {
+            type: 'pie',
+            data: {
+                labels: ['Rank 1', 'Rank 2', 'Rank 3', 'Rank 4'],
+                datasets: [{
+                    data: {{ player['rank_counts'] | safe }},
+                    backgroundColor: ['#4caf50', '#ffeb3b', '#ff9800', '#f44336']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    datalabels: {
+                        formatter: (value, ctx) => {
+                            let total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                            let percentage = (value / total * 100).toFixed(1) + '%';
+                            return percentage;
+                        },
+                        color: '#000',
+                        font: { weight: 'bold' }
+                    }
+                }
             }
-        }
+        });
+        {% endfor %}
     </script>
 </body>
 </html>

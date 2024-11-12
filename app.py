@@ -36,77 +36,69 @@ def home():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # SQL query to calculate player stats dynamically from the games table and players table
     cursor.execute("""
-    SELECT 
-        p.name,
-        p.games_played,
-        p.rank1_count,
-        p.rank2_count,
-        p.rank3_count,
-        p.rank4_count,
-        p.highest_rank,
-        COUNT(g.game_id) AS games_played,
-        SUM(CASE 
-            WHEN g.player1 = p.name THEN g.final_score1
-            WHEN g.player2 = p.name THEN g.final_score2
-            WHEN g.player3 = p.name THEN g.final_score3
-            WHEN g.player4 = p.name THEN g.final_score4
-            ELSE 0
-        END) AS total_points
-    FROM players p
-    LEFT JOIN games g
-        ON p.name IN (g.player1, g.player2, g.player3, g.player4)
-    GROUP BY p.name
-    ORDER BY total_points DESC
+        SELECT 
+            p.name,
+            p.games_played,
+            p.rank1_count,
+            p.rank2_count,
+            p.rank3_count,
+            p.rank4_count,
+            p.highest_rank,
+            SUM(CASE 
+                WHEN g.player1 = p.name THEN g.final_score1
+                WHEN g.player2 = p.name THEN g.final_score2
+                WHEN g.player3 = p.name THEN g.final_score3
+                WHEN g.player4 = p.name THEN g.final_score4
+                ELSE 0
+            END) AS total_points
+        FROM players p
+        LEFT JOIN games g
+            ON p.name IN (g.player1, g.player2, g.player3, g.player4)
+        GROUP BY p.name
+        ORDER BY total_points DESC
     """)
 
     players = cursor.fetchall()
-
-    # Step 1: Get the 4th highest rank to determine qualifying players for the Fenix game
-    cursor.execute("SELECT highest_rank FROM players ORDER BY highest_rank DESC LIMIT 4")
-    ranks = cursor.fetchall()
-
-    if len(ranks) < 4:
-        qualifying_rank = ranks[-1]['highest_rank'] if ranks else 0
-    else:
-        qualifying_rank = ranks[-1]['highest_rank'] - 1  # Qualify if rank >= (4th highest - 1)
-
-    # Step 2: Fetch the current Fenix from the latest Fenix game
+    # Step 2: Fetch the latest Fenix game (where is_fenix is TRUE)
     cursor.execute("""
-        SELECT * FROM games
-        WHERE player1 IN (SELECT name FROM players WHERE highest_rank >= ?)
-          AND player2 IN (SELECT name FROM players WHERE highest_rank >= ?)
-          AND player3 IN (SELECT name FROM players WHERE highest_rank >= ?)
-          AND player4 IN (SELECT name FROM players WHERE highest_rank >= ?)
-        ORDER BY game_date DESC LIMIT 1
-        """, (qualifying_rank, qualifying_rank, qualifying_rank, qualifying_rank))
-
+           SELECT * FROM games
+           WHERE is_fenix = TRUE
+           ORDER BY game_date DESC LIMIT 1
+       """)
     latest_fenix_game = cursor.fetchone()
 
+    # Determine the current Fenix based on the winner of the latest Fenix game
     if latest_fenix_game:
         current_fenix = get_winner(latest_fenix_game)
     else:
         current_fenix = None  # Fallback if no Fenix game exists
     player_data = []
-    for player in players:
-        # Calculate the average rank directly from the player's rank counts
-        total_games = player['games_played']
-        if total_games > 0:
-            # Weigh the ranks: 1*rank1_count + 2*rank2_count + 3*rank3_count + 4*rank4_count
-            total_rank_score = (1 * player['rank1_count']) + (2 * player['rank2_count']) + (
-                        3 * player['rank3_count']) + (4 * player['rank4_count'])
-            average_rank = round(total_rank_score / total_games, 2)
-        else:
-            average_rank = 'N/A'
 
-        # Append the player's data along with the calculated average rank
+    for player in players:
+        rank_counts = [
+            player['rank1_count'],
+            player['rank2_count'],
+            player['rank3_count'],
+            player['rank4_count']
+        ]
+        total_games = player['games_played'] or 1  # Prevent division by zero
+
+        # Calculate rank percentages
+        rank_percentages = [
+            round((count / total_games) * 100, 1) for count in rank_counts
+        ]
+
+        # Add all player data to the player_data list
         player_data.append({
             'name': player['name'],
             'total_points': round(player['total_points'], 1),
             'games_played': total_games,
             'highest_rank': player['highest_rank'],
-            'average_rank': average_rank  # Use the calculated average rank
+            'average_rank': round((1 * player['rank1_count'] + 2 * player['rank2_count'] +
+                                   3 * player['rank3_count'] + 4 * player['rank4_count']) / total_games, 2),
+            'rank_counts': rank_counts,
+            'rank_percentages': rank_percentages
         })
 
     conn.close()
