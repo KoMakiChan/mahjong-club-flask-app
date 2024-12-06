@@ -45,6 +45,7 @@ def home():
             p.rank3_count,
             p.rank4_count,
             p.highest_rank,
+            p.rate,
             SUM(CASE 
                 WHEN g.player1 = p.name THEN g.final_score1
                 WHEN g.player2 = p.name THEN g.final_score2
@@ -98,7 +99,8 @@ def home():
             'average_rank': round((1 * player['rank1_count'] + 2 * player['rank2_count'] +
                                    3 * player['rank3_count'] + 4 * player['rank4_count']) / total_games, 2),
             'rank_counts': rank_counts,
-            'rank_percentages': rank_percentages
+            'rank_percentages': rank_percentages,
+            'rate': player['rate']
         })
 
     conn.close()
@@ -219,6 +221,49 @@ def admin_page():
 
                 conn.commit()  # Commit the rank updates
                 flash("Game and ranks updated successfully!", "success")
+                # After updating the ranks, update the rates:
+                # 1. Fetch players' current rates
+                cursor.execute("SELECT name, rate,games_played FROM players WHERE name IN (?,?,?,?)", tuple(players))
+                player_rates = cursor.fetchall()
+                name_to_rate = {row['name']: row['rate'] for row in player_rates}
+                name_to_games = {row['name']: row['games_played'] for row in player_rates}
+
+                # Ranks array is already determined above
+
+                # 3. Determine 对战结果 for each rank
+                rank_result_map = {
+                    1: 45.0,
+                    2: 5.0,
+                    3: -15.0,
+                    4: -35.0
+                }
+
+                # 4. Compute table average rate
+                total_rate = sum(name_to_rate[player] for player in players)
+                avg_rate = total_rate / 4.0
+                if avg_rate < 1500:
+                    avg_rate = 1500.0
+
+                # 5. Calculate rate changes and update DB
+                for i, player in enumerate(players):
+                    player_rank = ranks[i]
+                    player_rate = name_to_rate[player]
+                    match_result = rank_result_map[player_rank]
+                    games_played = name_to_games[player] - 1
+
+                    # Calculate rate_coef
+                    rate_coef = max(1.0 - games_played * 0.002, 0.2)
+
+                    rate_change = rate_coef * (match_result + (avg_rate - player_rate) / 40.0)
+                    print(f"Debug - Player: {player}, Rate Coef: {rate_coef:.3f}, Rate Change: {rate_change:.3f}, Avg Rate: {avg_rate:.1f}, Player Rate: {player_rate:.1f}")
+
+                    new_rate = player_rate + rate_change
+                    # Optionally round to three decimal places:
+
+                    cursor.execute("UPDATE players SET rate = ? WHERE name = ?", (new_rate, player))
+
+                conn.commit()
+                flash("Game, ranks, and rates updated successfully!", "success")
 
         elif "delete_game" in request.form:
             game_id = request.form["game_id"]
@@ -278,8 +323,8 @@ def admin_page():
             else:
                 # Insert the new player into the database
                 cursor.execute("""
-                       INSERT INTO players (name, games_played, rank1_count, rank2_count, rank3_count, rank4_count, highest_rank) 
-                       VALUES (?, 0, 0, 0, 0, 0, 0)
+                       INSERT INTO players (name, games_played, rank1_count, rank2_count, rank3_count, rank4_count, highest_rank,rate) 
+                       VALUES (?, 0, 0, 0, 0, 0, 0,1500.0)
                    """, (player_name,))
                 conn.commit()
                 flash(f"Player '{player_name}' added successfully!", "success")

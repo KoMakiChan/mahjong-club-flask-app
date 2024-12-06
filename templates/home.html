@@ -170,7 +170,7 @@
         <div class="section">
             <h2>Player Rankings</h2>
             {% for player in players %}
-            <div class="ranking-card">
+            <a href="{{ url_for('player_statistics', player_name=player['name']) }}" class="ranking-card">
                 <div class="player-details">
                     <div class="player-info">
                         <div class="player-name">
@@ -182,17 +182,24 @@
                         <div class="points">Points: {{ player['total_points'] }}</div>
                         <div class="games-played">Games Played: {{ player['games_played'] }}</div>
                         <div class="avg-rank">平均顺位: {{ player['average_rank'] }}</div>
-                        <div class="rank-percentage">Rank 1: {{ player['rank_percentages'][0] }}%, Rank 2: {{ player['rank_percentages'][1] }}%, Rank 3: {{ player['rank_percentages'][2] }}%, Rank 4: {{ player['rank_percentages'][3] }}%</div>
+                        <div class="rate">Rate: {{ player['rate']|safe_round(2) }}</div>
+                        <div class="rank-percentage">
+                            Rank 1: {{ player['rank_percentages'][0] }}%,
+                            Rank 2: {{ player['rank_percentages'][1] }}%,
+                            Rank 3: {{ player['rank_percentages'][2] }}%,
+                            Rank 4: {{ player['rank_percentages'][3] }}%
+                        </div>
                     </div>
                     <div class="fancy-rank">{{ rank_display(player['highest_rank']) }}</div>
                     <div class="chart-container">
                         <canvas id="pieChart{{ loop.index }}"></canvas>
                     </div>
                 </div>
-            </div>
+            </a>
             {% endfor %}
         </div>
-      <!-- Admin login link -->
+
+        <!-- Admin login link -->
         <div class="admin-link">
             <a href="/admin-login" class="link-button">Admin Login</a>
         </div>
@@ -204,87 +211,23 @@
             <span class="close" onclick="document.getElementById('rank-modal').style.display='none'">&times;</span>
             <h2>Ranking System</h2>
             <p>Players are ranked based on their average position in recent games. Your rank will never go down once you've achieved a new rank. Your rank is calculated purely based on the average ranking per game in the past X games (not by points).</p>
-           <table>
-                <tr>
-                    <th>Level</th>
-                    <th>Games</th>
-                    <th>Average Ranking per Game</th>
-                </tr>
-                <tr>
-                    <td>5级 (Default)</td>
-                    <td>N/A</td>
-                    <td>N/A</td>
-                </tr>
-                <tr>
-                    <td>4级</td>
-                    <td>5</td>
-                    <td>&le; 3.0</td>
-                </tr>
-                <tr>
-                    <td>3级</td>
-                    <td>5</td>
-                    <td>&le; 2.9</td>
-                </tr>
-                <tr>
-                    <td>2级</td>
-                    <td>5</td>
-                    <td>&le; 2.8</td>
-                </tr>
-                <tr>
-                    <td>1级</td>
-                    <td>10</td>
-                    <td>&le; 2.7</td>
-                </tr>
-                <tr>
-                    <td>初段</td>
-                    <td>10</td>
-                    <td>&le; 2.6</td>
-                </tr>
-                <tr>
-                    <td>二段</td>
-                    <td>10</td>
-                    <td>&le; 2.5</td>
-                </tr>
-                <tr>
-                    <td>三段</td>
-                    <td>15</td>
-                    <td>&le; 2.5</td>
-                </tr>
-                <tr>
-                    <td>四段</td>
-                    <td>15</td>
-                    <td>&le; 2.4</td>
-                </tr>
-                <tr>
-                    <td>五段</td>
-                    <td>20</td>
-                    <td>&le; 2.4</td>
-                </tr>
-                <tr>
-                    <td>六段</td>
-                    <td>20</td>
-                    <td>&le; 2.3</td>
-                </tr>
-                <tr>
-                    <td>七段</td>
-                    <td>25</td>
-                    <td>&le; 2.3</td>
-                </tr>
-                <tr>
-                    <td>八段</td>
-                    <td>25</td>
-                    <td>&le; 2.2</td>
-                </tr>
-                <tr>
-                    <td>九段</td>
-                    <td>25</td>
-                    <td>&le; 2.1</td>
-                </tr>
-                <tr>
-                    <td>十段</td>
-                    <td>30</td>
-                    <td>&le; 2.0</td>
-                </tr>
+            <table>
+                <tr><th>Level</th><th>Games</th><th>Average Ranking per Game</th></tr>
+                <tr><td>5级 (Default)</td><td>N/A</td><td>N/A</td></tr>
+                <tr><td>4级</td><td>5</td><td>&le; 3.0</td></tr>
+                <tr><td>3级</td><td>5</td><td>&le; 2.9</td></tr>
+                <tr><td>2级</td><td>5</td><td>&le; 2.8</td></tr>
+                <tr><td>1级</td><td>10</td><td>&le; 2.7</td></tr>
+                <tr><td>初段</td><td>10</td><td>&le; 2.6</td></tr>
+                <tr><td>二段</td><td>10</td><td>&le; 2.5</td></tr>
+                <tr><td>三段</td><td>15</td><td>&le; 2.5</td></tr>
+                <tr><td>四段</td><td>15</td><td>&le; 2.4</td></tr>
+                <tr><td>五段</td><td>20</td><td>&le; 2.4</td></tr>
+                <tr><td>六段</td><td>20</td><td>&le; 2.3</td></tr>
+                <tr><td>七段</td><td>25</td><td>&le; 2.3</td></tr>
+                <tr><td>八段</td><td>25</td><td>&le; 2.2</td></tr>
+                <tr><td>九段</td><td>25</td><td>&le; 2.1</td></tr>
+                <tr><td>十段</td><td>30</td><td>&le; 2.0</td></tr>
             </table>
         </div>
     </div>
