@@ -12,9 +12,9 @@ def add_column():
         cursor.execute("PRAGMA table_info(players);")
         columns = [column[1] for column in cursor.fetchall()]
 
-        if 'highest_rank' not in columns:
+        if 'rate' not in columns:
             # Execute the ALTER TABLE command to add the new column
-            cursor.execute("ALTER TABLE players ADD COLUMN highest_rank INTEGER DEFAULT 0;")
+            cursor.execute("ALTER TABLE players ADD COLUMN rate REAL DEFAULT 1500.0;")
             print("Column 'highest_rank' added successfully.")
         else:
             print("Column 'highest_rank' already exists.")

@@ -185,6 +185,7 @@ Icon" class="fenix-icon">
                         <div class="points">Points: {{ player['total_points'] }}</div>
                         <div class="games-played">Games Played: {{ player['games_played'] }}</div>
                         <div class="avg-rank">平均顺位: {{ player['average_rank'] }}</div>
+                        <div class="rate">Rate: {{ player['rate']|safe_round(2) }}</div>
                         <div class="rank-percentage">
                             Rank 1: {{ player['rank_percentages'][0] }}%,
                             Rank 2: {{ player['rank_percentages'][1] }}%,
